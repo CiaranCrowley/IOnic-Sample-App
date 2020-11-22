@@ -5,6 +5,7 @@ import { useStorage } from '@ionic/react-hooks/storage';
 import { isPlatform } from '@ionic/react';
 import { CameraResultType, CameraSource, CameraPhoto, Capacitor, FilesystemDirectory } from "@capacitor/core";
 
+
 const PHOTO_STORAGE = "photos";
 export function usePhotoGallery() {
 
@@ -49,18 +50,38 @@ export function usePhotoGallery() {
       }
     };
 
+    const deletePhoto = async (photo: Photo) => {
+      // Remove this photo from the Photos reference data array
+      const newPhotos = photos.filter(p => p.filepath !== photo.filepath);
+    
+      // Update photos array cache by overwriting the existing photo array
+      set(PHOTO_STORAGE, JSON.stringify(newPhotos));
+    
+      // delete photo file from filesystem
+      const filename = photo.filepath.substr(photo.filepath.lastIndexOf('/') + 1);
+      await deleteFile({
+        path: filename,
+        directory: FilesystemDirectory.Data
+      });
+      setPhotos(newPhotos);
+    };
+
     useEffect(() => {
       const loadSaved = async () => {
-        const photosString = await get(PHOTO_STORAGE);
-        const photos = (photosString ? JSON.parse(photosString) : []) as Photo[];
-        for (let photo of photos) {
-          const file = await readFile({
-            path: photo.filepath,
-            directory: FilesystemDirectory.Data
-          });
-          photo.webviewPath = `data:image/jpeg;base64,${file.data}`;
+        const photosString = await get('photos');
+        const photosInStorage = (photosString ? JSON.parse(photosString) : []) as Photo[];
+        // If running on the web...
+        if (!isPlatform('hybrid')) {
+          for (let photo of photosInStorage) {
+            const file = await readFile({
+              path: photo.filepath,
+              directory: FilesystemDirectory.Data
+            });
+            // Web platform only: Load photo as base64 data
+            photo.webviewPath = `data:image/jpeg;base64,${file.data}`;
+          }
         }
-        setPhotos(photos);
+        setPhotos(photosInStorage);
       };
       loadSaved();
     }, [get, readFile]);
@@ -79,6 +100,7 @@ export function usePhotoGallery() {
     };
   
     return {
+      deletePhoto,
       photos,
       takePhoto
     };
