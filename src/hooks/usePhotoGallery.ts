@@ -5,7 +5,10 @@ import { useStorage } from '@ionic/react-hooks/storage';
 import { isPlatform } from '@ionic/react';
 import { CameraResultType, CameraSource, CameraPhoto, Capacitor, FilesystemDirectory } from "@capacitor/core";
 
+const PHOTO_STORAGE = "photos";
 export function usePhotoGallery() {
+
+  const { get, set } = useStorage();
 
     const { getPhoto } = useCamera();
     const [photos, setPhotos] = useState<Photo[]>([]);
@@ -26,6 +29,22 @@ export function usePhotoGallery() {
         webviewPath: photo.webPath
       };
     };
+
+    useEffect(() => {
+      const loadSaved = async () => {
+        const photosString = await get(PHOTO_STORAGE);
+        const photos = (photosString ? JSON.parse(photosString) : []) as Photo[];
+        for (let photo of photos) {
+          const file = await readFile({
+            path: photo.filepath,
+            directory: FilesystemDirectory.Data
+          });
+          photo.webviewPath = `data:image/jpeg;base64,${file.data}`;
+        }
+        setPhotos(photos);
+      };
+      loadSaved();
+    }, [get, readFile]);
   
     const takePhoto = async () => {
       const cameraPhoto = await getPhoto({
@@ -37,13 +56,14 @@ export function usePhotoGallery() {
       const savedFileImage = await savePicture(cameraPhoto, fileName);
       const newPhotos = [savedFileImage, ...photos];
       setPhotos(newPhotos);
+      set(PHOTO_STORAGE, JSON.stringify(newPhotos));
     };
   
     return {
       photos,
       takePhoto
     };
-  }
+}
 export interface Photo {
   filepath: string;
   webviewPath?: string;
